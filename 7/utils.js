@@ -164,20 +164,24 @@ export const arrayReplace = (arr, v, i) => arr.toSpliced(i, 1, v);
  */
 export const arrayRemove = (arr, i) => arr.toSpliced(i, 1);
 
+/**
+ *
+ * @template T
+ * @param {{v: T, left: object, right: object}} tree
+ * @param {T} v
+ */
+export const treeAdd = (tree, v) => {};
 
 export const add = (a, b) => a + b;
 
 export const mult = (a, b) => a * b;
 
 /**
- * @template T
- * @typedef {v: T, left: BinaryTree, right: BinaryTree} BinaryTree
- */
-
-/**
  *
  * @template T
- * @param {BinaryTree<T>} tree
- * @param {T} v
+ * @template U
+ * @param {T | null | undefined} x
+ * @param {(t:T) => U} fun
+ * @returns {U | undefined}
  */
-export const treeAdd = (tree, v) => {};
+export const opt = (x, fun) => (x != null ? fun(x) : undefined);
