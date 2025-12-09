@@ -386,3 +386,123 @@ export const unionFind = {
   countRoots: unionFindCountRoots,
   valueToSet: unionFindValueToSet,
 };
+
+export const makeEdge = (x0, y0, x1, y1) => [
+  [x0, y0],
+  [x1, y1],
+];
+
+export const isPointWithinLineBounds = ([x, y], [[x1, y1], [x2, y2]]) =>
+  x <= Math.max(x1, x2) &&
+  x >= Math.min(x1, x2) &&
+  y <= Math.max(y1, y2) &&
+  y >= Math.min(y1, y2);
+
+/**
+ * https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection
+ *
+ * But I needed to also check whether the point was within the line bounds,
+ * as the lines are not infinite.
+ *
+ * @param {[[number, number], [number, number]]} l1
+ * @param {[[number, number], [number, number]]} l2
+ * @returns {boolean}
+ */
+export const linesIntersect = (l1, l2) => {
+  const point = getIntersection(l1, l2);
+  if (point == null) {
+    return false;
+  }
+
+  const result =
+    isPointWithinLineBounds(point, l1) && isPointWithinLineBounds(point, l2);
+
+  return result;
+};
+
+export const getIntersection = (l1, l2) => {
+  const [[x1, y1], [x2, y2]] = l1;
+  const [[x3, y3], [x4, y4]] = l2;
+  const denominator = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  if (denominator === 0) {
+    return null;
+  }
+
+  return [
+    ((x1 * y2 - y1 * x2) * (x3 - x4) - (x1 - x2) * (x3 * y4 - y3 * x4)) /
+      denominator,
+    ((x1 * y2 - y1 * x2) * (y3 - y4) - (y1 - y2) * (x3 * y4 - y3 * x4)) /
+      denominator,
+  ];
+};
+
+/**
+ * https://en.wikipedia.org/wiki/Point_in_polygon
+ *
+ * @param {[[number, number], [number, number]][]} edges
+ * @param {[number, number]} point
+ * @returns {boolean}
+ */
+export function isPointWithinPolygon(edges, point) {
+  // First, if the point is on the edge, it's within the polygon,
+  // as the edge has area.
+  if (
+    edges.some(
+      ([[x1, y1], [x2, y2]]) =>
+        (x1 === x2 &&
+          point[0] === x1 &&
+          point[1] <= Math.max(y1, y2) &&
+          point[1] >= Math.min(y1, y2)) ||
+        (y1 === y2 &&
+          point[1] === y1 &&
+          point[0] <= Math.max(x1, x2) &&
+          point[0] >= Math.min(x1, x2))
+    )
+  ) {
+    return true;
+  }
+  // Otherwise, count the times it intersects and see if it's uneven.
+  // Make a vertical line from [0,y] to the point.
+  const ray = [[point[0], 0], point];
+  const intersections = edges.reduce(
+    (acc, cur) =>
+      // Handle corners and parallel lines
+      (point[0] <= cur[0][0] && point[0] <= cur[1][0]) ||
+      (point[1] <= cur[0][1] && point[1] <= cur[1][1])
+        ? acc
+        : linesIntersect(ray, cur)
+        ? acc + 1
+        : acc,
+    0
+  );
+  return intersections % 2 === 1;
+}
+
+export function lineToInnerRectangleSides([[x1, y1], [x2, y2]]) {
+  // Need to reduce the size by 1 in all directions, as we're only
+  // interested in whether any lines intersect with the inner square.
+  const topLeft = [Math.min(x1, x2) + 1, Math.min(y1, y2) + 1];
+  const bottomRight = [Math.max(x1, x2) - 1, Math.max(y1, y2) - 1];
+  x1 = topLeft[0];
+  y1 = topLeft[1];
+  x2 = bottomRight[0];
+  y2 = bottomRight[1];
+
+  if (x1 > x2 || y1 > y2) {
+    return [];
+  }
+
+  if (x1 === x2 || y1 === y2) {
+    return [[topLeft, bottomRight]];
+  }
+
+  return [
+    makeEdge(x1, y1, x2, y1),
+    makeEdge(x2, y1, x2, y2),
+    makeEdge(x2, y2, x1, y2),
+    makeEdge(x1, y2, x1, y1),
+  ];
+}
+
+export const rectArea = ([x1, y1], [x2, y2]) =>
+  (Math.abs(x1 - x2) + 1) * (Math.abs(y1 - y2) + 1);
