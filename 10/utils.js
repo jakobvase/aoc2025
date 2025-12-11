@@ -590,3 +590,184 @@ const insertInPlace = (arr, item, i) => {
 };
 
 export const use = (i, fn) => fn(i);
+
+/**
+ * For linear algebra with several solutions, reduce to the minimum number of
+ * free variables.
+ *
+ * See https://en.wikipedia.org/wiki/Gaussian_elimination
+ * and https://en.wikipedia.org/wiki/System_of_linear_equations.
+ *
+ * I was inspired by this gentleman's implementation:
+ * https://github.com/gabrielmougard/AoC-2025/blob/main/10-factory/main.zig
+ *
+ * After this, the matrix is in reduced row echelon form
+ * https://en.wikipedia.org/wiki/Row_echelon_form#Reduced_row_echelon_form
+ * which means the number of free variables has been minimized, and a solution
+ * may have been found (if there was any.)
+ *
+ * I haven't tested for input where there are no solutions.
+ *
+ * @param {Fraction[][]} matrix
+ */
+export function gaussianElimination(matrix) {
+  let currentRow = 0;
+  for (
+    let col = 0;
+    col < matrix[0].length - 1 && currentRow < matrix.length;
+    col++
+  ) {
+    // console.log(`Column ${col}`);
+    const pivotRow = matrix.findIndex(
+      (r, i) => i >= currentRow && !Fraction.is0(r[col])
+    );
+    if (pivotRow >= 0) {
+      if (pivotRow !== currentRow) {
+        const tmp = matrix[pivotRow];
+        matrix[pivotRow] = matrix[currentRow];
+        matrix[currentRow] = tmp;
+      }
+
+      // console.log(`row ${currentRow} swap`);
+      // printMatrix(matrix);
+
+      const denominator = matrix[currentRow][col];
+      for (let c = col; c < matrix[0].length; c++) {
+        matrix[currentRow][c] = Fraction.div(
+          matrix[currentRow][c],
+          denominator
+        );
+      }
+
+      // console.log(`row ${currentRow} divide`);
+      // printMatrix(matrix);
+
+      // for all other rows, subtract by factor
+      for (let row = 0; row < matrix.length; row++) {
+        if (row !== currentRow && !Fraction.is0(matrix[row][col])) {
+          const factor = matrix[row][col];
+          for (let c = 0; c < matrix[0].length; c++) {
+            matrix[row][c] = Fraction.sub(
+              matrix[row][c],
+              Fraction.mult(factor, matrix[currentRow][c])
+            );
+          }
+        }
+      }
+
+      // console.log(`row ${currentRow} unify other`);
+      // printMatrix(matrix);
+
+      currentRow++;
+    }
+  }
+}
+
+export function printMatrix(matrix) {
+  try {
+    for (let row of matrix) {
+      console.log(
+        row
+          .map((c) =>
+            ("" + (Fraction.toInt(c) ?? c[0] + "/" + c[1])).padStart(4)
+          )
+          .join(" ")
+      );
+    }
+    console.log();
+  } catch (e) {
+    console.log("failed to print matrix. console.dir representation");
+    console.dir(matrix, { depth: null });
+  }
+}
+
+/**
+ * @typedef {[number, number]} Fraction
+ */
+export const Fraction = {
+  normalise: ([num, den]) => {
+    // console.dir({ num, den });
+    if (den === 0) {
+      return [num, den];
+    }
+    if (den < 0) {
+      num *= -1;
+      den *= -1;
+    }
+    let d = Fraction.commonDen([Math.abs(num), den]);
+    return [num / d, den / d];
+  },
+  commonDen: ([num, den]) => {
+    while (den != 0 && !Number.isNaN(den)) {
+      let x = den;
+      den = num % den;
+      num = x;
+    }
+    return Math.max(1, num);
+  },
+  make: (num, den) => Fraction.normalise([num, den]),
+  fromInt: (i) => [i, 1],
+  toInt: ([n, d]) => (d === 0 || n % d !== 0 ? null : n / d),
+  add: ([n1, d1], [n2, d2]) => Fraction.normalise([n1 * d2 + d1 * n2, d1 * d2]),
+  sub: ([n1, d1], [n2, d2]) => Fraction.normalise([n1 * d2 - n2 * d1, d1 * d2]),
+  mult: ([n1, d1], [n2, d2]) => Fraction.normalise([n1 * n2, d1 * d2]),
+  div: ([n1, d1], [n2, d2]) => Fraction.normalise([n1 * d2, n2 * d1]),
+  is0: ([n]) => n === 0,
+};
+
+/**
+ *
+ * @param {number[][]} matrix
+ * @returns {number[]}
+ */
+export function getFreeVarColumns(matrix) {
+  const freeVars = [];
+  let curRow = 0;
+  let c = 0;
+  while (c < matrix[0].length - 1) {
+    if (curRow >= matrix.length || Fraction.is0(matrix[curRow][c])) {
+      freeVars.push(c);
+    } else {
+      curRow++;
+    }
+    c++;
+  }
+
+  return freeVars;
+}
+
+/**
+ * I used this for AoC 2025-10, where we had to find the least amount of button presses,
+ * but it should be useful for any augmented matrix.
+ *
+ * @param {Fraction[][]} matrix
+ * @param {Record<number, number>} freeVariables
+ */
+export function solveMatrix(matrix, freeVariables) {
+  // solve the equation using the current variables and back-substitution
+  const solution = { ...freeVariables };
+  // for each row in reverse
+  for (let row = matrix.length - 1; row >= 0; row--) {
+    // take the pivot column for that row
+    let pivotCol = matrix[row].findIndex((c) => !Fraction.is0(c));
+    // take the junction value
+    let rhs = matrix[row][matrix[row].length - 1];
+    // for each column from the pivot column, except the result column:
+    for (let col = pivotCol + 1; col < matrix[row].length - 1; col++) {
+      // subtract from the junction value for the row the current column times the free variable for that column
+      rhs = Fraction.sub(
+        rhs,
+        Fraction.mult(matrix[row][col], Fraction.fromInt(solution[col] ?? 0))
+      );
+    }
+    // if the junction value is not an integer, or is below zero, the solution is not valid (at least not in this case. Might be valid in other cases.)
+    let asInt = Fraction.toInt(rhs);
+    if (asInt == null || asInt < 0) {
+      return null;
+    }
+    // store the value in the solution table for this column
+    solution[pivotCol] = asInt;
+  }
+
+  return solution;
+}
