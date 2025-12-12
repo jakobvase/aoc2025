@@ -117,7 +117,7 @@ function solveMachine(machine, i) {
   findBestSolution(
     matrix,
     mutables,
-    machine.junctions.reduce((x, y) => Math.max(x, y)),
+    machine.junctions.reduce((x, y) => Math.max(x, y)) + 1,
     {}
   );
   // console.log(`Result: ${mutables.best}`);
